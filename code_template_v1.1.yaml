@@ -1,0 +1,379 @@
+# This CloudFormation template deploys a basic VPC / Network
+
+AWSTemplateFormatVersion: 2010-09-09
+Description: Creates a VPC with four subnets (two public, two private) across 2 Availability Zones
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+    - Label:
+        default: VPC configuration parameters
+      Parameters :
+      - VPCCIDR
+      - PublicSubnetACIDR
+      - PublicSubnetBCIDR
+      - PrivateSubnetACIDR
+      - PrivateSubnetBCIDR
+      - SSHLocation
+      - KeyPairName
+    ParameterLabels:
+      VPCCIDR:
+        default: Enter CIDR of new VPC
+      PublicSubnetACIDR:
+        default: Enter CIDR of the public subnet A
+      PublicSubnetBCIDR:
+        default: Enter CIDR of the public subnet B
+      PrivateSubnetACIDR:
+        default: Enter CIDR of the private subnet A
+      PrivateSubnetBCIDR:
+        default: Enter CIDR of the private subnet B
+      SSHLocation:
+        default: Subnet allowed to ssh on TCP to public subnet
+      KeyPairName:
+        default: Bastion_Host
+
+Parameters:
+  VPCCIDR:
+    AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$
+    ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
+    Default: 10.1.0.0/16
+    Description: CIDR block for entire VPC.
+    Type: String
+  PublicSubnetACIDR:
+    AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$
+    ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
+    Default: 10.1.10.0/24
+    Description: CIDR block for the public subnet
+    Type: String
+  PublicSubnetBCIDR:
+    AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$
+    ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
+    Default: 10.1.20.0/24
+    Description: CIDR block for the public subnet
+    Type: String
+  PrivateSubnetACIDR:
+    AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$
+    ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
+    Default: 10.1.50.0/24
+    Description: CIDR block for the private subnet
+    Type: String
+  PrivateSubnetBCIDR:
+    AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$
+    ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
+    Default: 10.1.60.0/24
+    Description: CIDR block for the private subnet
+    Type: String
+  SSHLocation:
+    AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(/([0-9]|[1-2][0-9]|3[0-2]))$
+    ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/0-28
+    Default: 0.0.0.0/0
+    Description: Network allowed to ssh to instances in public subnet.
+    Type: String
+  KeyPairName:
+    Description: Keypair for Linux bastion host
+    Type: AWS::EC2::KeyPair::KeyName
+    Default: Bastion_Host
+    
+Mappings:
+
+  RegionMap:
+    us-east-1:
+      AMI: ami-22ce4934
+    us-west-1:
+      AMI: ami-9e247efe
+    us-east-2:
+      AMI: ami-7bfcd81e
+    us-west-2:
+      AMI: ami-8ca83fec
+
+Resources:
+
+  # VPC:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VPCCIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+      - Key: Name
+        Value:  !Sub VPC ${VPCCIDR}
+      - Key: CloudFormationStack
+        Value: !Ref AWS::StackId
+
+  # internet access:      
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    DependsOn: VPC
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # subnets, 2 public and 2 private:
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PublicSubnetACIDR
+      AvailabilityZone: !Select [ 0, !GetAZs ]
+      Tags:
+      - Key: Name
+        Value: !Sub Public ${PublicSubnetACIDR}
+      - Key: CloudFormationStack
+        Value: !Ref AWS::StackId
+
+  PublicSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PublicSubnetBCIDR
+      AvailabilityZone: !Select [ 1, !GetAZs ]
+      Tags:
+      - Key: Name
+        Value: !Sub Public ${PublicSubnetBCIDR}
+      - Key: CloudFormationStack
+        Value: !Ref AWS::StackId
+
+  PrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PrivateSubnetACIDR
+      AvailabilityZone: !Select [ 0, !GetAZs ]
+      Tags:
+      - Key: Name
+        Value: !Sub Private ${PrivateSubnetACIDR}
+      - Key: CloudFormationStack
+        Value: !Ref AWS::StackId
+        
+  PrivateSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PrivateSubnetBCIDR
+      AvailabilityZone: !Select [ 1, !GetAZs ]
+      Tags:
+      - Key: Name
+        Value: !Sub Private ${PrivateSubnetBCIDR}
+      - Key: CloudFormationStack
+        Value: !Ref AWS::StackId
+        
+  # route tables for subnets:
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+      - Key: Name
+        Value: Public
+      - Key: CloudFormationStack
+        Value: !Ref AWS::StackId
+
+  PublicRoute1:   # Public route table has direct routing to IGW
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+      
+  # private route table:
+  # PrivateRouteTable:
+  #   Type: AWS::EC2::RouteTable
+  #   Properties:
+  #     VpcId: !Ref VPC
+  #     Tags:
+  #     - Key: Name
+  #       Value: Private
+
+  # PrivateRoute1:            # Private route table can access web via NAT (created below)
+  #   Type: AWS::EC2::Route
+  #   Properties:
+  #     RouteTableId: !Ref PrivateRouteTable
+  #     DestinationCidrBlock: 0.0.0.0/0
+      # Route traffic through the NAT Gateway:
+      # NatGatewayId: !Ref NATGateway
+
+  # Attach the public subnets to public route tables
+
+  PublicSubnetARouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetA
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnetBRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetB
+      RouteTableId: !Ref PublicRouteTable
+
+  # Attach the private subnets to private route tables    
+
+  # PrivateSubnetARouteTableAssociation:
+  #   Type: AWS::EC2::SubnetRouteTableAssociation
+  #   Properties:
+  #     SubnetId: !Ref PrivateSubnetA
+  #     RouteTableId: !Ref PrivateRouteTable
+      
+  # PrivateSubnetBRouteTableAssociation:
+  #   Type: AWS::EC2::SubnetRouteTableAssociation
+  #   Properties:
+  #     SubnetId: !Ref PrivateSubnetB
+  #     RouteTableId: !Ref PrivateRouteTable
+
+  # A NAT Gateway: 
+  # NATGateway:
+  #  Type: AWS::EC2::NatGateway
+  #  Properties: 
+  #    SubnetId: !Ref PublicSubnetA
+  #    Tags: 
+  #    - Key: Name
+  #      Value: !Sub NAT-${AWS::StackName}
+
+  PublicInstanceSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VPC
+      GroupDescription: Enable SSH access via port 22
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '22'
+        ToPort: '22'
+        CidrIp: !Ref SSHLocation
+      - IpProtocol: tcp
+        FromPort: '80'
+        ToPort: '80'
+        CidrIp: 0.0.0.0/0
+      Tags:
+      - Key: Name
+        Value: !Sub PublicSG ${VPCCIDR}
+      - Key: CloudFormationStack
+        Value: !Ref AWS::StackId
+
+  PrivateSubnetInstanceSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VPC
+      GroupDescription: Enable all TCP ports from instances in this VPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '1'
+        ToPort: '65535'
+        CidrIp: !Ref VPCCIDR
+      Tags:
+      - Key: Name
+        Value: !Sub PrivateSG ${VPCCIDR}
+      - Key: CloudFormationStack
+        Value: !Ref AWS::StackId
+
+  LinuxBastionHost:
+    Type: AWS::EC2::Instance
+    DependsOn:
+    - AttachGateway
+    Properties:
+      KeyName: !Ref KeyPairName
+      ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+      InstanceType: t2.micro
+      NetworkInterfaces:
+      - AssociatePublicIpAddress: true
+        DeleteOnTermination: true
+        Description: ENI for bastion host
+        DeviceIndex: '0'
+        SubnetId: !Ref PublicSubnetA
+        GroupSet:
+        - !Ref PublicInstanceSG
+      Tags:
+      - Key: Name
+        Value: !Sub Linux bastion ${VPCCIDR}
+      - Key: CloudFormationStack
+        Value: !Ref AWS::StackId
+
+  MyAppServer:
+    Type: AWS::EC2::Instance
+    Properties:
+      KeyName: !Ref KeyPairName
+      ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+      InstanceType: t2.micro
+      NetworkInterfaces:
+      - AssociatePublicIpAddress: false
+        DeleteOnTermination: true
+        Description: App server of private subnet
+        DeviceIndex: '0'
+        SubnetId: !Ref PrivateSubnetA
+        GroupSet:
+        - !Ref PrivateSubnetInstanceSG
+      Tags:
+      - Key: Name
+        Value: !Sub App Server ${VPCCIDR}
+      - Key: CloudFormationStack
+        Value: !Ref AWS::StackId
+
+  MyRdsSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties: 
+      DBSubnetGroupDescription: Data base in private Subnet
+      DBSubnetGroupName: RDS Subnet
+      SubnetIds: 
+        - !Ref PrivateSubnetA
+        - !Ref PrivateSubnetB
+
+  VPCEC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VPC
+      GroupDescription: Open database for access
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 3306
+        ToPort: 3306
+
+  DBinstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      AllocatedStorage: 5
+      DBInstanceClass: db.t2.small
+      DBName: MyDBName
+      VPCSecurityGroups: 
+        - !Ref VPCEC2SecurityGroup
+      DBSubnetGroupName: !Ref MyRdsSubnetGroup
+      Engine: MySQL
+      MasterUserPassword: shank999
+      MasterUsername: shashank
+      # DeletionPolicy: Snapshot
+
+  # Outputs:
+  #   VPCId:
+  #     Description: VPCId of the newly created VPC
+  #     Value: !Ref 'VPC'
+  # # # NatGateway:
+  # # #   Description: NAT gateway instance
+  # # #   Value: !Ref 'NAT'
+  #   PublicSubnetA:
+  #     Description: SubnetId of the public subnet A
+  #     Value: !Ref PublicSubnetA
+  #   PublicSubnetB:
+  #     Description: SubnetId of the public subnet B
+  #     Value: !Ref PublicSubnetB
+  #   PublicRouteTable:
+  #     Description: Public route table
+  #     Value: !Ref PublicRouteTable
+  #   PublicInstanceSG:
+  #     Description: SG for instances in public subnet
+  #     Value: !Ref PublicInstanceSG
+  #   PrivateSubnetA:
+  #     Description: SubnetId of the public subnet A
+  #     Value: !Ref PrivateSubnetA
+  #   PrivateSubnetB:
+  #     Description: SubnetId of the public subnet B
+  #     Value: !Ref PrivateSubnetB
+  #   PrivateRouteTable:
+  #     Description: Private route table 
+  #     Value: !Ref PrivateRouteTable
+  #   PrivateSubnetInstanceSG:
+  #     Description: SG for instances in the private subnet
+  #     Value: !Ref PrivateSubnetInstanceSG
+  #   LinuxBastionHost:
+  #     Description: Linux bastion instance
+  #     Value: !Ref LinuxBastionHost
