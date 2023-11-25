@@ -1,35 +1,42 @@
-name: Threat Modeling Analysis
-
 on:
   push:
     branches:
       - main
+      - 'code_template_v1.1.yaml' # useful to filter this job to execute only when the threat model changes
   workflow_dispatch:
-    # This event allows manual triggering of the workflow
+       # This event allows manual triggering of the workflow
 
 jobs:
-  analyze_threat_model:
+
+  threagile_job:
     runs-on: ubuntu-latest
-
+    name: Threat Model Analysis
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v2
       
-      - name: Install Microsoft Threat Modeling Tool (MTMT)
+      # Checkout the repo
+      - name: Checkout Workspace
+        uses: actions/checkout@v2
+     
+      # Run Threagile
+      - name: Run Threagile
+        id: threagile
+        uses: threagile/run-threagile-action@v1
+        with:
+          model-file: 'threagile.yaml'
+     
+      # Archive resulting files as artifacts
+      - name: Archive Results
+        uses: actions/upload-artifact@v2
+        with:
+          name: threagile-report
+          path: threagile/output
+     
+      # Optional step to link from repo's README.md if you want. This can also be committed to a separate branch if desired.
+      - name: Commit & Push Report and DFD Diagram
         run: |
-          # Commands to install MTMT on Ubuntu
-          # Example: Install MTMT from a package or a repository
-          sudo apt-get update
-          sudo apt-get install mtmt
-
-      - name: Run MTMT against CloudFormation Template
-        run: |
-          # Replace with commands to run MTMT against your CloudFormation template
-          # Example: Run MTMT with the appropriate parameters
-          mtmt analyze -template code_template_v1.1.yaml -output threat_model.json
-
-      - name: Generate Threat Modeling Report
-        run: |
-          # Parse the generated threat model and generate reports/logs
-          # Example: Extract STRIDE-based threats from the generated JSON
-          # Generate reports/logs
+          git config --local user.email "threagile@example.com" # customize as desired
+          git config --local user.name "Threagile" # customize as desired
+          git add threagile/output/report.pdf
+          git add threagile/output/data-flow-diagram.png
+          git commit -m "Update threat model report and data-flow diagram by Threagile" # customize as desired
+          git push
