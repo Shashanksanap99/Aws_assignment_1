@@ -1,0 +1,35 @@
+name: Threat Modeling Analysis
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    # This event allows manual triggering of the workflow
+
+jobs:
+  analyze_threat_model:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+      
+      - name: Install Microsoft Threat Modeling Tool (MTMT)
+        run: |
+          # Commands to install MTMT on Ubuntu
+          # Example: Install MTMT from a package or a repository
+          sudo apt-get update
+          sudo apt-get install mtmt
+
+      - name: Run MTMT against CloudFormation Template
+        run: |
+          # Replace with commands to run MTMT against your CloudFormation template
+          # Example: Run MTMT with the appropriate parameters
+          mtmt analyze -template code_template_v1.1.yaml -output threat_model.json
+
+      - name: Generate Threat Modeling Report
+        run: |
+          # Parse the generated threat model and generate reports/logs
+          # Example: Extract STRIDE-based threats from the generated JSON
+          # Generate reports/logs
